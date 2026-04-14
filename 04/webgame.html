@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 과일 잡기 게임 - BGM 에디션</title>
+    <!-- MediaPipe Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: 'Pretendard', sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            border-radius: 15px;
+            overflow: hidden;
+            border: 4px solid #333;
+        }
+        canvas {
+            display: block;
+            background-color: #000;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #loading-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #fff;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="loading-overlay">
+            <div class="spinner"></div>
+            <p>카메라와 AI 모델을 불러오고 있습니다...</p>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div class="controls">
+        <button id="startBtn">게임 시작</button>
+        <button id="restartBtn" style="display:none; background: #f44336;">다시 시작</button>
+    </div>
+
+    <video id="videoElement" style="display:none;" playsinline></video>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const video = document.getElementById('videoElement');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // Game Constants
+        const WIDTH = 800;
+        const HEIGHT = 600;
+        const FRUITS = ['🍎', '🍌', '🍉', '🍇', '🍓', '🍍', '🍒', '🥝'];
+        const TRASHES = ['🗑️', '💣', '🥫', '👞'];
+        const WIN_SCORE = 10;
+        const GAME_TIME = 60;
+
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+
+        // Audio Context & BGM State
+        let audioCtx = null;
+        let bgmInterval = null;
+        let bgmNoteIndex = 0;
+        const bgmNotes = [261.63, 293.66, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66]; // C4, D4, E4, G4, A4... (Happy Pentatonic)
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playBGMStep() {
+            if (!audioCtx || !isGameRunning) return;
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(bgmNotes[bgmNoteIndex], audioCtx.currentTime);
+            
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime); // 저볼륨 배경음
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.4);
+            
+            bgmNoteIndex = (bgmNoteIndex + 1) % bgmNotes.length;
+        }
+
+        function startBGM() {
+            bgmNoteIndex = 0;
+            if (bgmInterval) clearInterval(bgmInterval);
+            bgmInterval = setInterval(playBGMStep, 250); // 120 BPM 느낌의 속도
+        }
+
+        function stopBGM() {
+            if (bgmInterval) {
+                clearInterval(bgmInterval);
+                bgmInterval = null;
+            }
+        }
+
+        function playFruitSound() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+            osc.frequency.exponentialRampToValueAtTime(1046.50, audioCtx.currentTime + 0.1); // C6
+            
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function playTrashSound() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.5);
+            
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.5);
+        }
+
+        // Game State
+        let score = 0;
+        let timeLeft = GAME_TIME;
+        let isGameRunning = false;
+        let lastHandPos = { x: -100, y: -100 };
+        let items = [];
+        let particles = [];
+        let timerInterval;
+
+        // AI Hands Setup
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({ image: video });
+            },
+            width: WIDTH,
+            height: HEIGHT
+        });
+
+        camera.start().then(() => {
+            loadingOverlay.style.display = 'none';
+        });
+
+        function onResults(results) {
+            ctx.save();
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+            ctx.translate(WIDTH, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(results.image, 0, 0, WIDTH, HEIGHT);
+            ctx.restore();
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const palm = landmarks[9];
+                lastHandPos = {
+                    x: (1 - palm.x) * WIDTH,
+                    y: palm.y * HEIGHT
+                };
+
+                ctx.beginPath();
+                ctx.arc(lastHandPos.x, lastHandPos.y, 25, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.fill();
+                ctx.strokeStyle = '#4CAF50';
+                ctx.lineWidth = 5;
+                ctx.stroke();
+
+                if (isGameRunning) {
+                    checkCollisions(lastHandPos);
+                }
+            }
+
+            if (isGameRunning) {
+                updateItems();
+                updateParticles();
+            }
+            
+            drawUI();
+        }
+
+        function spawnItem() {
+            if (!isGameRunning) return;
+            const isFruit = Math.random() > 0.35;
+            const type = isFruit 
+                ? FRUITS[Math.floor(Math.random() * FRUITS.length)]
+                : TRASHES[Math.floor(Math.random() * TRASHES.length)];
+            
+            items.push({
+                x: Math.random() * (WIDTH - 80) + 40,
+                y: -60,
+                type: type,
+                isFruit: isFruit,
+                speed: 3 + Math.random() * 4,
+                size: 50
+            });
+
+            setTimeout(spawnItem, 600 + Math.random() * 900);
+        }
+
+        function updateItems() {
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                item.y += item.speed;
+
+                ctx.font = `${item.size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(item.type, item.x, item.y);
+
+                if (item.y > HEIGHT + 60) {
+                    items.splice(i, 1);
+                }
+            }
+        }
+
+        function checkCollisions(hand) {
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                const dx = hand.x - item.x;
+                const dy = hand.y - item.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < 60) {
+                    createParticles(item.x, item.y, item.isFruit ? '#FFEB3B' : '#9E9E9E');
+                    if (item.isFruit) {
+                        score++;
+                        playFruitSound();
+                    } else {
+                        score = Math.max(0, score - 1);
+                        playTrashSound();
+                    }
+                    items.splice(i, 1);
+
+                    if (score >= WIN_SCORE) {
+                        endGame(true);
+                    }
+                }
+            }
+        }
+
+        function createParticles(x, y, color) {
+            for (let i = 0; i < 15; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 20,
+                    vy: (Math.random() - 0.5) * 20,
+                    life: 1.0,
+                    color: color,
+                    size: Math.random() * 6 + 2
+                });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.05;
+                
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life;
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function drawUI() {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, WIDTH, 70);
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`SCORE: ${score} / ${WIN_SCORE}`, 25, 45);
+
+            ctx.textAlign = 'right';
+            const color = timeLeft < 10 ? '#FF5252' : '#00E676';
+            ctx.fillStyle = color;
+            ctx.fillText(`TIME: ${timeLeft}s`, WIDTH - 25, 45);
+
+            if (!isGameRunning && timeLeft === GAME_TIME && score === 0) {
+                ctx.fillStyle = 'rgba(0,0,0,0.75)';
+                ctx.fillRect(0, 0, WIDTH, HEIGHT);
+                ctx.fillStyle = '#FFD700';
+                ctx.textAlign = 'center';
+                ctx.font = 'bold 40px Arial';
+                ctx.fillText('AI FRUIT CATCHER', WIDTH/2, HEIGHT/2 - 40);
+                ctx.font = '22px Arial';
+                ctx.fillStyle = 'white';
+                ctx.fillText('손바닥을 움직여 과일을 잡으세요!', WIDTH/2, HEIGHT/2 + 10);
+                ctx.font = '18px Arial';
+                ctx.fillStyle = '#AAAAAA';
+                ctx.fillText('(과일: +1점 / 쓰레기: -1점)', WIDTH/2, HEIGHT/2 + 45);
+            }
+        }
+
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ko-KR';
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function startGame() {
+            initAudio();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            
+            score = 0;
+            timeLeft = GAME_TIME;
+            items = [];
+            particles = [];
+            isGameRunning = true;
+            startBtn.style.display = 'none';
+            restartBtn.style.display = 'none';
+
+            startBGM(); // 배경음악 시작
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    endGame(false);
+                }
+            }, 1000);
+
+            spawnItem();
+        }
+
+        function endGame(isSuccess) {
+            isGameRunning = false;
+            clearInterval(timerInterval);
+            stopBGM(); // 배경음악 정지
+            restartBtn.style.display = 'inline-block';
+
+            let msg = "";
+            if (isSuccess) {
+                msg = "승리! 10점을 빠르게 달성하셨네요. 정말 대단합니다!";
+            } else {
+                msg = `시간이 모두 흘러갔습니다. 최종 점수는 ${score}점입니다. 다시 시도해 보세요.`;
+            }
+
+            ctx.fillStyle = 'rgba(0,0,0,0.9)';
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            ctx.fillStyle = isSuccess ? '#00E676' : '#FF5252';
+            ctx.font = 'bold 60px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(isSuccess ? 'VICTORY!' : 'GAME OVER', WIDTH/2, HEIGHT/2 - 40);
+            ctx.fillStyle = 'white';
+            ctx.font = '26px Arial';
+            ctx.fillText(msg, WIDTH/2, HEIGHT/2 + 40);
+
+            speak(msg);
+        }
+
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', startGame);
+
+    </script>
+</body>
+</html>
