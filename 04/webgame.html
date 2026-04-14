@@ -3,116 +3,203 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 과일 잡기 게임 - BGM 에디션</title>
+    <title>AI 과일 잡기 게임 - Hand Tracking</title>
     <!-- MediaPipe Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700&display=swap');
+        
         body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #0f172a;
+            color: white;
             margin: 0;
-            padding: 0;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            background-color: #1a1a1a;
-            color: white;
-            font-family: 'Pretendard', sans-serif;
-            overflow: hidden;
         }
-        #game-container {
+
+        #game-wrapper {
             position: relative;
-            box-shadow: 0 0 50px rgba(0,0,0,0.5);
-            border-radius: 15px;
+            width: 100%;
+            max-width: 800px;
+            aspect-ratio: 4 / 3;
+            border-radius: 1rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border: 4px solid #1e293b;
             overflow: hidden;
-            border: 4px solid #333;
+            background: #000;
         }
+
         canvas {
+            width: 100%;
+            height: 100%;
             display: block;
-            background-color: #000;
         }
-        .controls {
-            margin-top: 20px;
-            display: flex;
-            gap: 15px;
-        }
-        button {
-            padding: 12px 24px;
-            font-size: 18px;
-            cursor: pointer;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            transition: background 0.3s;
-        }
-        button:hover {
-            background: #45a049;
-        }
-        #loading-overlay {
+
+        .overlay {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
+            inset: 0;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            z-index: 100;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.85);
+            z-index: 50;
+            transition: opacity 0.3s ease;
         }
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
+
+        .hidden {
+            display: none !important;
+            opacity: 0;
+        }
+
+        .btn {
+            background: #22c55e;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.75rem;
+            font-weight: bold;
+            font-size: 1.25rem;
+            transition: all 0.2s;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:hover {
+            background: #16a34a;
+            transform: translateY(-2px);
+        }
+
+        .btn-restart {
+            background: #ef4444;
+        }
+
+        .btn-restart:hover {
+            background: #dc2626;
+        }
+
+        /* 홈 버튼 스타일 */
+        .home-btn {
+            position: absolute;
+            top: 1.5rem;
+            left: 1.5rem;
+            z-index: 100;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            backdrop-filter: blur(4px);
+        }
+
+        .home-btn:hover {
+            background: rgba(51, 65, 85, 0.9);
+            transform: scale(1.05);
+        }
+
+        #loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #3b82f6;
             border-radius: 50%;
-            border-top: 4px solid #fff;
             width: 40px;
             height: 40px;
             animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
         }
+
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
-    <div id="game-container">
-        <div id="loading-overlay">
-            <div class="spinner"></div>
-            <p>카메라와 AI 모델을 불러오고 있습니다...</p>
+    <!-- 홈 버튼 -->
+    <a href="../index.html" class="home-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>홈으로</span>
+    </a>
+
+    <div class="mb-4 text-center">
+        <h1 class="text-3xl font-bold text-green-400 mb-1">AI 과일 잡기 🍎</h1>
+        <p class="text-slate-400">손바닥을 움직여 떨어지는 과일을 획득하세요!</p>
+    </div>
+
+    <div id="game-wrapper">
+        <!-- 로딩 오버레이 -->
+        <div id="loading-overlay" class="overlay">
+            <div id="loading-spinner"></div>
+            <p class="text-lg">카메라와 AI 모델을 연결 중...</p>
         </div>
+
+        <!-- 시작 오버레이 -->
+        <div id="start-overlay" class="overlay hidden">
+            <h2 class="text-4xl font-bold mb-4">준비되셨나요?</h2>
+            <p class="mb-8 text-slate-300">목표: 60초 안에 20점 달성하기!</p>
+            <button id="start-btn" class="btn">게임 시작하기</button>
+        </div>
+
+        <!-- 결과 오버레이 -->
+        <div id="result-overlay" class="overlay hidden">
+            <h2 id="result-title" class="text-5xl font-bold mb-2">승리!</h2>
+            <p id="result-desc" class="text-xl mb-8 text-slate-300">10점을 달성했습니다.</p>
+            <button id="restart-btn" class="btn btn-restart">다시 도전</button>
+        </div>
+
         <canvas id="gameCanvas"></canvas>
     </div>
 
-    <div class="controls">
-        <button id="startBtn">게임 시작</button>
-        <button id="restartBtn" style="display:none; background: #f44336;">다시 시작</button>
+    <div class="mt-6 flex gap-8 text-sm text-slate-400">
+        <div class="flex items-center gap-2">
+            <span class="text-xl">🍎</span> 과일: +1점
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="text-xl">💣</span> 쓰레기: -1점
+        </div>
     </div>
 
-    <video id="videoElement" style="display:none;" playsinline></video>
+    <video id="videoElement" class="hidden" playsinline></video>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const video = document.getElementById('videoElement');
+        
         const loadingOverlay = document.getElementById('loading-overlay');
-        const startBtn = document.getElementById('startBtn');
-        const restartBtn = document.getElementById('restartBtn');
+        const startOverlay = document.getElementById('start-overlay');
+        const resultOverlay = document.getElementById('result-overlay');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const resultTitle = document.getElementById('result-title');
+        const resultDesc = document.getElementById('result-desc');
 
-        // Game Constants
+        // 게임 설정
         const WIDTH = 800;
         const HEIGHT = 600;
         const FRUITS = ['🍎', '🍌', '🍉', '🍇', '🍓', '🍍', '🍒', '🥝'];
         const TRASHES = ['🗑️', '💣', '🥫', '👞'];
-        const WIN_SCORE = 10;
+        const WIN_SCORE = 20;
         const GAME_TIME = 60;
 
         canvas.width = WIDTH;
         canvas.height = HEIGHT;
 
-        // Audio Context & BGM State
+        // 사운드 시스템
         let audioCtx = null;
         let bgmInterval = null;
         let bgmNoteIndex = 0;
-        const bgmNotes = [261.63, 293.66, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66]; // C4, D4, E4, G4, A4... (Happy Pentatonic)
+        const bgmNotes = [261.63, 293.66, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66];
 
         function initAudio() {
             if (!audioCtx) {
@@ -120,79 +207,31 @@
             }
         }
 
-        function playBGMStep() {
-            if (!audioCtx || !isGameRunning) return;
-            
+        function playSound(freq, type = 'sine', duration = 0.1, vol = 0.1) {
+            if (!audioCtx) return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
-            
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(bgmNotes[bgmNoteIndex], audioCtx.currentTime);
-            
-            gain.gain.setValueAtTime(0.05, audioCtx.currentTime); // 저볼륨 배경음
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-            
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
             osc.connect(gain);
             gain.connect(audioCtx.destination);
-            
             osc.start();
-            osc.stop(audioCtx.currentTime + 0.4);
-            
-            bgmNoteIndex = (bgmNoteIndex + 1) % bgmNotes.length;
+            osc.stop(audioCtx.currentTime + duration);
         }
 
         function startBGM() {
-            bgmNoteIndex = 0;
             if (bgmInterval) clearInterval(bgmInterval);
-            bgmInterval = setInterval(playBGMStep, 250); // 120 BPM 느낌의 속도
+            bgmNoteIndex = 0;
+            bgmInterval = setInterval(() => {
+                if (!isGameRunning) return;
+                playSound(bgmNotes[bgmNoteIndex], 'sine', 0.4, 0.03);
+                bgmNoteIndex = (bgmNoteIndex + 1) % bgmNotes.length;
+            }, 250);
         }
 
-        function stopBGM() {
-            if (bgmInterval) {
-                clearInterval(bgmInterval);
-                bgmInterval = null;
-            }
-        }
-
-        function playFruitSound() {
-            if (!audioCtx) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
-            osc.frequency.exponentialRampToValueAtTime(1046.50, audioCtx.currentTime + 0.1); // C6
-            
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-            
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
-        }
-
-        function playTrashSound() {
-            if (!audioCtx) return;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(200, audioCtx.currentTime);
-            osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.5);
-            
-            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-            
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.5);
-        }
-
-        // Game State
+        // 게임 상태
         let score = 0;
         let timeLeft = GAME_TIME;
         let isGameRunning = false;
@@ -201,7 +240,7 @@
         let particles = [];
         let timerInterval;
 
-        // AI Hands Setup
+        // MediaPipe Hands 설정
         const hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
@@ -209,8 +248,8 @@
         hands.setOptions({
             maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
         });
 
         hands.onResults(onResults);
@@ -224,15 +263,20 @@
         });
 
         camera.start().then(() => {
-            loadingOverlay.style.display = 'none';
+            loadingOverlay.classList.add('hidden');
+            startOverlay.classList.remove('hidden');
         });
 
         function onResults(results) {
             ctx.save();
             ctx.clearRect(0, 0, WIDTH, HEIGHT);
+            
+            // 웹캠 화면 반전 출력 (거울 모드)
             ctx.translate(WIDTH, 0);
             ctx.scale(-1, 1);
+            ctx.globalAlpha = 0.7;
             ctx.drawImage(results.image, 0, 0, WIDTH, HEIGHT);
+            ctx.globalAlpha = 1.0;
             ctx.restore();
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -244,11 +288,11 @@
                 };
 
                 ctx.beginPath();
-                ctx.arc(lastHandPos.x, lastHandPos.y, 25, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.arc(lastHandPos.x, lastHandPos.y, 30, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(34, 197, 94, 0.3)';
                 ctx.fill();
-                ctx.strokeStyle = '#4CAF50';
-                ctx.lineWidth = 5;
+                ctx.strokeStyle = '#22c55e';
+                ctx.lineWidth = 4;
                 ctx.stroke();
 
                 if (isGameRunning) {
@@ -266,21 +310,22 @@
 
         function spawnItem() {
             if (!isGameRunning) return;
-            const isFruit = Math.random() > 0.35;
+            const isFruit = Math.random() > 0.3;
             const type = isFruit 
                 ? FRUITS[Math.floor(Math.random() * FRUITS.length)]
                 : TRASHES[Math.floor(Math.random() * TRASHES.length)];
             
             items.push({
-                x: Math.random() * (WIDTH - 80) + 40,
-                y: -60,
+                x: Math.random() * (WIDTH - 100) + 50,
+                y: -50,
                 type: type,
                 isFruit: isFruit,
-                speed: 3 + Math.random() * 4,
+                speed: 3 + Math.random() * 5 + (score / 10),
                 size: 50
             });
 
-            setTimeout(spawnItem, 600 + Math.random() * 900);
+            const nextSpawn = Math.max(400, 1000 - (score * 20));
+            setTimeout(spawnItem, nextSpawn);
         }
 
         function updateItems() {
@@ -306,14 +351,14 @@
                 const dy = hand.y - item.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance < 60) {
-                    createParticles(item.x, item.y, item.isFruit ? '#FFEB3B' : '#9E9E9E');
+                if (distance < 55) {
+                    createParticles(item.x, item.y, item.isFruit ? '#4ade80' : '#94a3b8');
                     if (item.isFruit) {
                         score++;
-                        playFruitSound();
+                        playSound(523.25 + (score * 10), 'triangle', 0.1, 0.15);
                     } else {
                         score = Math.max(0, score - 1);
-                        playTrashSound();
+                        playSound(150, 'sawtooth', 0.3, 0.1);
                     }
                     items.splice(i, 1);
 
@@ -325,14 +370,14 @@
         }
 
         function createParticles(x, y, color) {
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < 12; i++) {
                 particles.push({
                     x, y,
-                    vx: (Math.random() - 0.5) * 20,
-                    vy: (Math.random() - 0.5) * 20,
+                    vx: (Math.random() - 0.5) * 15,
+                    vy: (Math.random() - 0.5) * 15,
                     life: 1.0,
                     color: color,
-                    size: Math.random() * 6 + 2
+                    size: Math.random() * 5 + 2
                 });
             }
         }
@@ -342,7 +387,7 @@
                 const p = particles[i];
                 p.x += p.vx;
                 p.y += p.vy;
-                p.life -= 0.05;
+                p.life -= 0.04;
                 
                 if (p.life <= 0) {
                     particles.splice(i, 1);
@@ -359,56 +404,40 @@
         }
 
         function drawUI() {
-            ctx.fillStyle = 'rgba(0,0,0,0.6)';
-            ctx.fillRect(0, 0, WIDTH, 70);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+            ctx.fillRect(0, 0, WIDTH, 60);
 
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 28px Arial';
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 24px Pretendard';
             ctx.textAlign = 'left';
-            ctx.fillText(`SCORE: ${score} / ${WIN_SCORE}`, 25, 45);
+            ctx.fillText(`SCORE: ${score} / ${WIN_SCORE}`, 20, 38);
 
             ctx.textAlign = 'right';
-            const color = timeLeft < 10 ? '#FF5252' : '#00E676';
-            ctx.fillStyle = color;
-            ctx.fillText(`TIME: ${timeLeft}s`, WIDTH - 25, 45);
-
-            if (!isGameRunning && timeLeft === GAME_TIME && score === 0) {
-                ctx.fillStyle = 'rgba(0,0,0,0.75)';
-                ctx.fillRect(0, 0, WIDTH, HEIGHT);
-                ctx.fillStyle = '#FFD700';
-                ctx.textAlign = 'center';
-                ctx.font = 'bold 40px Arial';
-                ctx.fillText('AI FRUIT CATCHER', WIDTH/2, HEIGHT/2 - 40);
-                ctx.font = '22px Arial';
-                ctx.fillStyle = 'white';
-                ctx.fillText('손바닥을 움직여 과일을 잡으세요!', WIDTH/2, HEIGHT/2 + 10);
-                ctx.font = '18px Arial';
-                ctx.fillStyle = '#AAAAAA';
-                ctx.fillText('(과일: +1점 / 쓰레기: -1점)', WIDTH/2, HEIGHT/2 + 45);
+            const isCritical = timeLeft <= 10;
+            ctx.fillStyle = isCritical ? '#ef4444' : '#22c55e';
+            ctx.fillText(`TIME: ${timeLeft}s`, WIDTH - 20, 38);
+            
+            if (isCritical && isGameRunning && Math.floor(Date.now() / 500) % 2 === 0) {
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(2, 2, WIDTH - 4, HEIGHT - 4);
             }
-        }
-
-        function speak(text) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'ko-KR';
-            window.speechSynthesis.speak(utterance);
         }
 
         function startGame() {
             initAudio();
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             
             score = 0;
             timeLeft = GAME_TIME;
             items = [];
             particles = [];
             isGameRunning = true;
-            startBtn.style.display = 'none';
-            restartBtn.style.display = 'none';
+            
+            startOverlay.classList.add('hidden');
+            resultOverlay.classList.add('hidden');
 
-            startBGM(); // 배경음악 시작
+            startBGM();
 
             timerInterval = setInterval(() => {
                 timeLeft--;
@@ -423,27 +452,19 @@
         function endGame(isSuccess) {
             isGameRunning = false;
             clearInterval(timerInterval);
-            stopBGM(); // 배경음악 정지
-            restartBtn.style.display = 'inline-block';
+            if (bgmInterval) clearInterval(bgmInterval);
 
-            let msg = "";
-            if (isSuccess) {
-                msg = "승리! 10점을 빠르게 달성하셨네요. 정말 대단합니다!";
-            } else {
-                msg = `시간이 모두 흘러갔습니다. 최종 점수는 ${score}점입니다. 다시 시도해 보세요.`;
-            }
+            resultTitle.innerText = isSuccess ? 'MISSION COMPLETE! 🎉' : 'GAME OVER 💀';
+            resultTitle.className = `text-5xl font-bold mb-2 ${isSuccess ? 'text-green-400' : 'text-red-500'}`;
+            resultDesc.innerText = isSuccess 
+                ? `${GAME_TIME - timeLeft}초 만에 ${WIN_SCORE}점을 달성했습니다!` 
+                : `시간이 종료되었습니다. 최종 점수: ${score}점`;
 
-            ctx.fillStyle = 'rgba(0,0,0,0.9)';
-            ctx.fillRect(0, 0, WIDTH, HEIGHT);
-            ctx.fillStyle = isSuccess ? '#00E676' : '#FF5252';
-            ctx.font = 'bold 60px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(isSuccess ? 'VICTORY!' : 'GAME OVER', WIDTH/2, HEIGHT/2 - 40);
-            ctx.fillStyle = 'white';
-            ctx.font = '26px Arial';
-            ctx.fillText(msg, WIDTH/2, HEIGHT/2 + 40);
-
-            speak(msg);
+            resultOverlay.classList.remove('hidden');
+            
+            const msg = new SpeechSynthesisUtterance(isSuccess ? "축하합니다! 미션 성공입니다." : "아쉽네요. 다시 도전해 보세요.");
+            msg.lang = 'ko-KR';
+            window.speechSynthesis.speak(msg);
         }
 
         startBtn.addEventListener('click', startGame);
